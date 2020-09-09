@@ -1,0 +1,9 @@
+{
+  "name": "spt-rabbithelpers",
+  "version": "1.0.0",
+  "description": "my personal helpers to rabbitmq",
+  "main": "dist/index.js",
+  "repository": "https://github.com/sptGabriel/spt-rabbithelpers",
+  "author": "Gabriel Costa",
+  "license": "MIT"
+}
