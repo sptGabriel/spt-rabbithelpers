@@ -11,7 +11,7 @@ export const retry = <T>(
           ? setTimeout(() => {
               retry(operation, maxRetries - 1, waitTimeMSeconds).then(resolve);
             }, waitTimeMSeconds)
-          : Promise.reject(error)
+          : Promise.reject(new Error(error))
       );
   });
 };
