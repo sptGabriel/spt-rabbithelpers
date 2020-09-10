@@ -1,48 +1,34 @@
 import { Connection, Channel, connect, Options } from 'amqplib';
 import { logger } from './utils/logger';
 import { retry } from './utils/retry';
+import { BrokerChannel } from './channel';
 
-export interface IMessage {
-  publishedAt: Date;
-}
-export interface IHandler<T> {
-  handle(message: T): any;
-}
-export interface Queue {
-  (queues: string): {
-    name: string;
-    options?: Options.AssertQueue;
-    handler?: IHandler<IMessage>;
-  };
-}
-export type QueuesToAssert = { queue: string; options?: Options.AssertQueue };
-export type ExchangesToAssert = {
-  exchange: string;
-  type: string;
-  options?: Options.AssertExchange;
-};
-export type QueuesToBind = {
-  queue: string;
-  source: string;
-  pattern: string;
-  args?: any;
-};
-//static
 class Broker {
   static connection: Connection = undefined;
-  static channel: Channel = undefined;
+  static channel: BrokerChannel = undefined;
   static urli: string = process.env.RABBIT_URL || 'url';
-
-  public static getChannel = () => {
-    return new Promise<Channel>((resolve, reject) => {
-      if (Broker.channel) reject();
-      Broker.connection.createChannel().then((ch) => {
-        Broker.channel = ch;
-        resolve(Broker.channel);
-      });
+  private static listenConnectionEvents = (): Promise<Connection> => {
+    return new Promise((resolve, reject) => {
+      if (!Broker.connection) {
+        Broker.urli ? Broker.start() : reject();
+        reject();
+      }
+      resolve(
+        Broker.connection.on('error', (err: Error) => {
+          logger.error(err.message);
+          setTimeout(Broker.start, 10000);
+        }) &&
+          Broker.connection.on('close', (err: Error) => {
+            if (err) {
+              logger.error('connection closed because err!');
+              setTimeout(Broker.start, 10000);
+            }
+            logger.info('connection to RabbitQM closed!');
+          })
+      );
     });
   };
-  public static start = () => {
+  private static connectRabbitMQ = () => {
     return new Promise<Connection>((resolve, reject) => {
       if (Broker.connection || !Broker.urli) {
         const message = !Broker.urli
@@ -54,46 +40,19 @@ class Broker {
       retry<Connection>(() => connect(Broker.urli), 10, 1000)
         .then((conn) => {
           Broker.connection = conn;
-          resolve(Broker.connection);
+          resolve(Broker.listenConnectionEvents());
         })
         .catch((err) => reject(new Error(err)));
     });
   };
-  public assertExchanges = (exchanges: ExchangesToAssert[]) => {
-    return Promise.all(
-      [].concat([
-        exchanges.map((exchange) => {
-          return Broker.channel.assertExchange(
-            exchange.exchange,
-            exchange.type,
-            exchange.options
-          );
-        }),
-      ])
-    );
-  };
-  static assertQueues = (queues: QueuesToAssert[]) => {
-    return Promise.all(
-      [].concat([
-        queues.map((queue) => {
-          return Broker.channel.assertQueue(queue.queue, queue.options);
-        }),
-      ])
-    );
-  };
-  static bindExchangesToQueues = (queues: QueuesToBind[]) => {
-    return Promise.all(
-      [].concat([
-        queues.map((queue) => {
-          return Broker.channel.bindQueue(
-            queue.queue,
-            queue.source,
-            queue.pattern,
-            queue.args
-          );
-        }),
-      ])
-    );
+  static start = () => {
+    Broker.connectRabbitMQ()
+      .then((connection) => {
+        Broker.connection = connection;
+      })
+      .catch((error: Error) => {
+        throw error;
+      });
   };
 }
 export let ConnectionMQ: Connection = Broker.connection;
