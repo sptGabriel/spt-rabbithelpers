@@ -46,17 +46,14 @@ class Broker {
     });
   };
   static start = () => {
-    Broker.connectRabbitMQ()
-      .then((connection) => {
-        Broker.connection = connection;
-      })
-      .catch((error: Error) => {
-        throw error;
-      });
+    Broker.connectRabbitMQ().catch((error: Error) => {
+      throw error;
+    });
   };
 }
 export let ConnectionMQ: Connection = Broker.connection;
-export let ChannelMQ: Channel = Broker.channel;
 export let StartMQ = () => {
   return Broker.start();
 };
+// export let ChannelMQ: Channel = BrokerChannel.channel;
+// export let subscribeQueue = BrokerChannel.subscribeQueue({ queue_name: 'A' });
