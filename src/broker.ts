@@ -1,34 +1,37 @@
 import { Connection, Channel, connect, Options } from 'amqplib';
 import { logger } from './utils/logger';
 import { retry } from './utils/retry';
-import { BrokerChannel } from './channel';
+import { BrokerChannel } from './Channel';
 
 class Broker {
   static connection: Connection = undefined;
-  static channel: BrokerChannel = undefined;
+  private channel: BrokerChannel = undefined;
   static urli: string = process.env.RABBIT_URL || 'url';
-  private static listenConnectionEvents = (): Promise<Connection> => {
+  constructor(channel: BrokerChannel) {
+    this.channel = channel;
+  }
+  private listenConnectionEvents = (): Promise<Connection> => {
     return new Promise((resolve, reject) => {
       if (!Broker.connection) {
-        Broker.urli ? Broker.start() : reject();
+        Broker.urli ? this.start() : reject();
         reject();
       }
       resolve(
         Broker.connection.on('error', (err: Error) => {
           logger.error(err.message);
-          setTimeout(Broker.start, 10000);
+          setTimeout(() => this.start, 10000);
         }) &&
           Broker.connection.on('close', (err: Error) => {
             if (err) {
               logger.error('connection closed because err!');
-              setTimeout(Broker.start, 10000);
+              setTimeout(() => this.start, 10000);
             }
             logger.info('connection to RabbitQM closed!');
           })
       );
     });
   };
-  private static connectRabbitMQ = () => {
+  private connectRabbitMQ = () => {
     return new Promise<Connection>((resolve, reject) => {
       if (Broker.connection || !Broker.urli) {
         const message = !Broker.urli
@@ -40,20 +43,22 @@ class Broker {
       retry<Connection>(() => connect(Broker.urli), 10, 1000)
         .then((conn) => {
           Broker.connection = conn;
-          resolve(Broker.listenConnectionEvents());
+          resolve(this.listenConnectionEvents());
         })
         .catch((err) => reject(new Error(err)));
     });
   };
-  static start = () => {
-    Broker.connectRabbitMQ().catch((error: Error) => {
+  public start = () => {
+    this.connectRabbitMQ().catch((error: Error) => {
       throw error;
     });
   };
 }
+// const Queue = new Queue();
+// const Exchange = new Exchange
+// const Channel = new Channel();
+// const Server = new Broker();
 export let ConnectionMQ: Connection = Broker.connection;
-export let StartMQ = () => {
-  return Broker.start();
-};
+
 // export let ChannelMQ: Channel = BrokerChannel.channel;
 // export let subscribeQueue = BrokerChannel.subscribeQueue({ queue_name: 'A' });

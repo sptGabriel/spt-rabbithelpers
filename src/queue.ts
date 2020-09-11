@@ -1,6 +1,9 @@
 import { Channel, Options } from 'amqplib';
-import { Exchange } from './exchange';
-import { AbstractChannelOptions } from './QueueAbstract';
+import { Exchange } from './Exchange';
+import {
+  AbstractChannelOptions,
+  ISubscribeReponse,
+} from './ChannelOptionsAbstract';
 
 export interface IMessage {
   publishedAt: Date;
@@ -23,19 +26,27 @@ export class Queue extends AbstractChannelOptions<IQueue> {
     super(channel);
     this.exchange = exchange;
   }
-  subscribe(data: IQueue): boolean {
-    if (Array.isArray(data)) return isArrayOfQueue(data);
-    if (this.queues[data.queue_name]) return false;
-    this.queues[data.queue_name] = data;
-    function isArrayOfQueue(data) {
-      return data.forEach((queue) => {
-        if (this.queues[queue.queue_name]) return;
-        this.queues[queue.queue_name] = queue;
-        return true;
+  subscribeArray = (data: IQueue[]): Promise<ISubscribeReponse<IQueue>>[] => {
+    return data.map((queue) => {
+      return this.subscribe(queue).then((value) => {
+        return {
+          isSubscribe: value,
+          item: queue,
+        };
       });
-    }
-  }
-  assert(data: IQueue) {
+    });
+  };
+
+  subscribe = (data: IQueue): Promise<boolean> => {
+    return new Promise<boolean>((resolve, reject) => {
+      if (this.queues[data.queue_name]) reject(false);
+      this.queues[data.queue_name] = data;
+      resolve(true);
+    }).catch((error: Error) => {
+      throw error;
+    });
+  };
+  assert = (data: IQueue): Promise<boolean> => {
     return Promise.all(
       [].concat(
         Object.keys(this.queues).map((key) => {
@@ -50,5 +61,5 @@ export class Queue extends AbstractChannelOptions<IQueue> {
       .catch((error: Error) => {
         throw error;
       });
-  }
+  };
 }

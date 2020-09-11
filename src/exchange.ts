@@ -1,6 +1,8 @@
 import { Channel, Options } from 'amqplib';
-import { AbstractChannelOptions } from './QueueAbstract';
-
+import {
+  AbstractChannelOptions,
+  ISubscribeReponse,
+} from './ChannelOptionsAbstract';
 export type IExchange = {
   exchange_name: string;
   type: string;
@@ -16,22 +18,42 @@ export class Exchange extends AbstractChannelOptions<IExchange> {
     super(channel);
     this.channel = channel;
   }
-  subscribe(data: IExchange): boolean {
-    if (Array.isArray(data)) return isArrayOfExchange(data);
-    if (this.exchanges[data.exchange_name]) return false;
-    this.exchanges[data.exchange_name] = data;
-    return true;
-    function isArrayOfExchange(data) {
-      const exchangesAdded = data.map((exchange) => {
-        if (this.exchanges[exchange.exchange_name]) return;
-        this.exchanges[exchange.exchange] = exchange;
-        return exchange;
+  subscribeArray = (
+    data: IExchange[]
+  ): Promise<ISubscribeReponse<IExchange>>[] => {
+    return data.map((exchange) => {
+      return this.subscribe(exchange).then((value) => {
+        return {
+          isSubscribe: value,
+          item: exchange,
+        };
       });
-      if (!exchangesAdded) return false;
-      return true;
-    }
-  }
-  assert(data: IExchange): boolean {
-    throw new Error('Method not implemented.');
-  }
+    });
+  };
+
+  subscribe = (data: IExchange): Promise<boolean> => {
+    return new Promise<boolean>((resolve, reject) => {
+      if (this.exchanges[data.exchange_name]) reject(false);
+      this.exchanges[data.exchange_name] = data;
+      resolve(true);
+    }).catch((error: Error) => {
+      throw error;
+    });
+  };
+  assert = (data: IExchange): Promise<boolean> => {
+    return Promise.all(
+      [].concat(
+        Object.keys(this.exchanges).map((key) => {
+          const { exchange_name, options }: IExchange = this.channel[key];
+          return this.channel.assertQueue(exchange_name, options);
+        })
+      )
+    )
+      .then((sucess) => {
+        return true;
+      })
+      .catch((error: Error) => {
+        throw error;
+      });
+  };
 }
